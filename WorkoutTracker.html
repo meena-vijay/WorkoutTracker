@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Load Log — Fitness Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --bg:#161B22; --panel:#1F2731; --panel-alt:#232C38; --border:#2E3947;
+    --amber:#D9A441; --amber-soft:#4A3D24; --teal:#5FA8A0; --teal-soft:#1F3934;
+    --text:#E7E9ED; --muted:#8996A6; --danger:#C77B6B;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:16px;}
+  body{padding-bottom:env(safe-area-inset-bottom,0);}
+  h1,h2{font-family:'Oswald',sans-serif; margin:0;}
+  .wrap{max-width:760px; margin:0 auto; padding:16px; padding-top:calc(16px + env(safe-area-inset-top,0));}
+  .headerRow{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:2px; flex-wrap:wrap;}
+  h1{font-size:22px; letter-spacing:.05em; text-transform:uppercase; font-weight:600;}
+  .sub{color:var(--muted); font-size:12px; margin:2px 0 16px;}
+  .status{color:var(--teal); font-size:12px;}
+  .card{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px;}
+  .cardTitle{display:flex; align-items:center; gap:8px; margin-bottom:14px; color:var(--text); font-size:13px; letter-spacing:.08em; text-transform:uppercase; font-weight:600;}
+  .cardTitle .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);}
+  .field{display:flex; flex-direction:column; gap:4px; min-width:0;}
+  .field label{color:var(--muted); font-size:10px; letter-spacing:.06em; text-transform:uppercase;}
+  input,select,textarea{
+    background:var(--panel-alt); border:1px solid var(--border); color:var(--text);
+    font-family:'IBM Plex Mono',monospace; font-size:16px; border-radius:8px; padding:10px 12px;
+    width:100%; outline:none; min-height:44px;
+  }
+  input:focus,select:focus{border-color:var(--amber);}
+  .row{display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px;}
+  .row > .field{flex:1 1 130px;}
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    border-radius:9px; padding:11px 16px; font-family:'IBM Plex Mono',monospace;
+    font-size:13px; font-weight:600; border:1px solid transparent; cursor:pointer; min-height:44px;
+  }
+  .btn-primary{background:var(--amber); color:#1B1608;}
+  .btn-ghost{background:transparent; color:var(--muted); border-color:var(--border);}
+  .btn-ghost.active{color:var(--amber); border-color:var(--amber); background:var(--amber-soft);}
+  .btn-teal.active{color:var(--teal); border-color:var(--teal); background:var(--teal-soft);}
+  .btn:active{opacity:.8;}
+  .tabs{display:flex; gap:6px; overflow-x:auto; margin-bottom:16px; padding-bottom:2px;}
+  .tabs .btn{white-space:nowrap; flex-shrink:0;}
+  .exBlock{border-top:1px solid var(--border); padding-top:12px; margin-top:12px;}
+  .exBlock:first-child{border-top:none; margin-top:0; padding-top:0;}
+  .exHead{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:8px;}
+  .exName{font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:14px;}
+  .exTarget{color:var(--muted); font-size:11px; text-align:right;}
+  .strip{display:flex; gap:4px; overflow-x:auto; padding-bottom:4px;}
+  .wk{min-width:26px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:10px; flex-shrink:0; border:1px solid var(--border);}
+  .wk.build{background:var(--teal-soft); color:var(--teal);}
+  .wk.deload{background:var(--amber-soft); color:var(--amber);}
+  .wk.current{border-width:2px;}
+  .entryRow{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; gap:8px;}
+  .entryRow:last-child{border-bottom:none;}
+  .entryRow > span{min-width:0; overflow-wrap:break-word;}
+  .muted{color:var(--muted);}
+  .metricBtns{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;}
+  canvas{max-height:220px;}
+  .exportBar{display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;}
+  .noteBanner{background:var(--panel-alt); border:1px dashed var(--border); border-radius:10px; padding:10px 12px; font-size:11px; color:var(--muted); margin-bottom:16px; line-height:1.5;}
+  .delBtn{background:transparent; border:none; color:var(--danger); font-size:18px; cursor:pointer; padding:6px 8px; min-height:40px; min-width:40px;}
+  .exHead{flex-wrap:wrap;}
+
+  /* Tablet: tighten spacing slightly */
+  @media (max-width:640px){
+    .wrap{padding:12px; padding-top:calc(12px + env(safe-area-inset-top,0));}
+    .card{padding:14px;}
+  }
+
+  /* Phone: force every field to full width, regardless of any inline flex-basis set in JS */
+  @media (max-width:480px){
+    .field{ flex:1 1 100% !important; max-width:100% !important; }
+    .row{ gap:10px; }
+    h1{font-size:19px;}
+    .exportBar .btn{flex:1 1 auto;}
+    .tabs .btn{font-size:12px; padding:10px 12px;}
+    .exTarget{text-align:left; width:100%;}
+    canvas{max-height:190px;}
+  }
+
+  /* Very small phones */
+  @media (max-width:360px){
+    .wrap{padding:10px;}
+    .card{padding:12px; border-radius:12px;}
+    h1{font-size:17px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  var LS = {
+    sessions:'ft_sessions_v1', milestones:'ft_milestones_v1',
+    body:'ft_bodymetrics_v1', settings:'ft_settings_v1'
+  };
+
+  function loadLS(key, fallback){
+    try{ var v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+    catch(e){ return fallback; }
+  }
+  function saveLS(key, val){
+    try{ localStorage.setItem(key, JSON.stringify(val)); }catch(e){ console.error('Storage error', e); }
+  }
+
+  var DAY_ORDER = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  var DAY_EXERCISES = {
+    Monday:{ label:"Upper Body + Core", exercises:[
+      {id:"mon_pushup", name:"Push-ups", target:"3×6–10", unit:"reps", hasWeight:false},
+      {id:"mon_row", name:"One-Arm DB Row", target:"3×10–12/side", unit:"reps", hasWeight:true},
+      {id:"mon_floor_press", name:"DB Floor Press", target:"3×10–12", unit:"reps", hasWeight:true},
+      {id:"mon_shoulder_press", name:"DB Shoulder Press", target:"2×8–12", unit:"reps", hasWeight:true},
+      {id:"mon_face_pull", name:"Band Face Pull", target:"2×15–20", unit:"reps", hasWeight:false},
+      {id:"mon_plank", name:"Plank", target:"3×30–40s", unit:"sec", hasWeight:false},
+      {id:"mon_bird_dog", name:"Bird Dog", target:"2×10/side", unit:"reps", hasWeight:false}
+    ]},
+    Tuesday:{ label:"Lower Body + Easy Run", exercises:[
+      {id:"tue_goblet", name:"Goblet Squat", target:"3×10–12", unit:"reps", hasWeight:true},
+      {id:"tue_rdl", name:"DB Romanian Deadlift", target:"3×10–12", unit:"reps", hasWeight:true},
+      {id:"tue_sl_rdl", name:"Single-Leg RDL", target:"2×8–10/side", unit:"reps", hasWeight:true},
+      {id:"tue_lunge", name:"Reverse Lunge", target:"2×8–10/leg", unit:"reps", hasWeight:true},
+      {id:"tue_calf", name:"Standing Calf Raise", target:"2×15–20", unit:"reps", hasWeight:true},
+      {id:"tue_run", name:"Easy Run", target:"conversational pace", unit:"distance"}
+    ]},
+    Wednesday:{ label:"Running Intervals + Mobility", exercises:[
+      {id:"wed_intervals", name:"Intervals", target:"6 rounds · 1min fast / 2min easy", unit:"rounds"}
+    ]},
+    Thursday:{ label:"Upper Body + Core", exercises:[
+      {id:"thu_pushup", name:"Push-ups", target:"4×5–8", unit:"reps", hasWeight:false},
+      {id:"thu_row", name:"One-Arm DB Row", target:"3×10–12/side", unit:"reps", hasWeight:true},
+      {id:"thu_floor_press", name:"DB Floor Press", target:"3×10–12", unit:"reps", hasWeight:true},
+      {id:"thu_lateral_raise", name:"DB Lateral Raise", target:"2×12–15", unit:"reps", hasWeight:true},
+      {id:"thu_lat_pulldown", name:"Band Lat Pulldown", target:"3×12–15", unit:"reps", hasWeight:true},
+      {id:"thu_curl", name:"DB Biceps Curl", target:"2×10–15", unit:"reps", hasWeight:true},
+      {id:"thu_triceps", name:"OH DB Triceps Ext", target:"2×10–15", unit:"reps", hasWeight:true},
+      {id:"thu_deadbug", name:"Dead Bug", target:"3×8–10/side", unit:"reps", hasWeight:false},
+      {id:"thu_side_plank", name:"Side Plank", target:"2×20–30s/side", unit:"sec", hasWeight:false}
+    ]},
+    Friday:{ label:"Lower Body + Conditioning", exercises:[
+      {id:"fri_goblet", name:"Goblet Squat", target:"3×10–15", unit:"reps", hasWeight:true},
+      {id:"fri_bulgarian", name:"Bulgarian Split Squat", target:"3×8–10/leg", unit:"reps", hasWeight:true},
+      {id:"fri_rdl", name:"DB Romanian Deadlift", target:"3×10–12", unit:"reps", hasWeight:true},
+      {id:"fri_bridge", name:"Glute Bridge", target:"2×15", unit:"reps", hasWeight:false},
+      {id:"fri_paused_squat", name:"Paused Bodyweight Squat", target:"progression target", unit:"reps", hasWeight:false},
+      {id:"fri_conditioning", name:"Conditioning Circuit", target:"3 rounds", unit:"rounds"},
+      {id:"fri_farmer_carry", name:"Farmer Carry", target:"2×30–45s", unit:"sec", hasWeight:true}
+    ]},
+    Saturday:{ label:"Long Run + Full Body", exercises:[
+      {id:"sat_run", name:"Long Run", target:"progressive distance", unit:"distance"},
+      {id:"sat_fin_pushup", name:"Finisher – Push-ups", target:"6–10", unit:"reps", hasWeight:false},
+      {id:"sat_fin_squat", name:"Finisher – Goblet Squat", target:"×12", unit:"reps", hasWeight:true},
+      {id:"sat_fin_row", name:"Finisher – DB Row", target:"×10/side", unit:"reps", hasWeight:true},
+      {id:"sat_fin_press", name:"Finisher – DB Shoulder Press", target:"×10", unit:"reps", hasWeight:true},
+      {id:"sat_fin_bridge", name:"Finisher – Glute Bridge", target:"×15", unit:"reps", hasWeight:false},
+      {id:"sat_fin_plank", name:"Finisher – Plank", target:"30–45s", unit:"sec", hasWeight:false}
+    ]}
+  };
+  var ALL_EXERCISES = [];
+  DAY_ORDER.forEach(function(d){
+    DAY_EXERCISES[d].exercises.forEach(function(e){
+      ALL_EXERCISES.push(Object.assign({}, e, {day:d}));
+    });
+  });
+
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function weekdayName(dateStr){
+    var names=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+    return names[new Date(dateStr+"T00:00:00").getDay()];
+  }
+  function computeMetric(unit, f){
+    if(unit==="distance") return parseFloat(f.distanceKm)||0;
+    if(unit==="rounds") return parseFloat(f.roundsCompleted)||0;
+    var list=(f.setsList||"").split(",").map(function(s){return parseFloat(s.trim());}).filter(function(n){return !isNaN(n);});
+    return list.length ? Math.max.apply(null,list) : 0;
+  }
+  function weekInfo(startDate){
+    if(!startDate) return null;
+    var start=new Date(startDate+"T00:00:00"), now=new Date();
+    var days=Math.floor((now-start)/(1000*60*60*24));
+    var week=Math.min(20, Math.max(1, Math.floor(days/7)+1));
+    return { week:week, isDeload: week % 5 === 4 };
+  }
+  function esc(s){ return (s===undefined||s===null) ? "" : String(s).replace(/"/g,'&quot;'); }
+
+  // ---------- State ----------
+  var state = {
+    sessions: loadLS(LS.sessions, {}),
+    milestones: loadLS(LS.milestones, []),
+    bodyMetrics: loadLS(LS.body, []),
+    settings: loadLS(LS.settings, {startDate:""}),
+    tab: "log",
+    logDate: todayStr(),
+    logDay: DAY_ORDER.indexOf(weekdayName(todayStr()))>=0 ? weekdayName(todayStr()) : "Monday",
+    logForm: {},
+    logNotes: "",
+    historyExId: ALL_EXERCISES[0].id,
+    msForm: {date: todayStr(), pushups:"", plankSec:"", pausedSquat:"", fiveKMin:""},
+    bmForm: {date: todayStr(), weight:"", waist:"", sleep:"", steps:"", protein:""},
+    msMetric: "pushups",
+    bmMetric: "weight",
+    statusMsg: ""
+  };
+  prefillLogForm();
+
+  function prefillLogForm(){
+    var existing = state.sessions[state.logDate];
+    if(existing && existing.day === state.logDay){
+      state.logForm = JSON.parse(JSON.stringify(existing.exercises||{}));
+      state.logNotes = existing.notes || "";
+    } else {
+      state.logForm = {};
+      state.logNotes = "";
+    }
+  }
+  function flash(msg){
+    state.statusMsg = msg;
+    render();
+    setTimeout(function(){ state.statusMsg=""; var el=document.getElementById('statusEl'); if(el) el.textContent=""; }, 2200);
+  }
+
+  var chartInstances = {};
+  function drawChart(canvasId, labels, data, color){
+    var el = document.getElementById(canvasId);
+    if(!el) return;
+    if(chartInstances[canvasId]) chartInstances[canvasId].destroy();
+    chartInstances[canvasId] = new Chart(el.getContext('2d'), {
+      type:'line',
+      data:{ labels:labels, datasets:[{ data:data, borderColor:color, backgroundColor:color, tension:.3, pointRadius:3 }]},
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false} },
+        scales:{
+          x:{ ticks:{ color:'#8996A6', font:{size:10} }, grid:{ color:'#2E3947' } },
+          y:{ ticks:{ color:'#8996A6', font:{size:10} }, grid:{ color:'#2E3947' } }
+        }
+      }
+    });
+  }
+
+  // ---------- Export ----------
+  function exportExcel(){
+    var wb = XLSX.utils.book_new();
+
+    var sessionRows = [];
+    Object.keys(state.sessions).sort().forEach(function(date){
+      var s = state.sessions[date];
+      var exList = (DAY_EXERCISES[s.day] && DAY_EXERCISES[s.day].exercises) || [];
+      Object.keys(s.exercises||{}).forEach(function(exId){
+        var def = exList.find(function(e){return e.id===exId;}) || {name:exId, target:"", unit:""};
+        var f = s.exercises[exId];
+        sessionRows.push({
+          Date: date, Day: s.day, Exercise: def.name, Target: def.target,
+          Weight_kg: f.weight || "", Sets_Reps_or_Sec: f.setsList || "",
+          Distance_km: f.distanceKm || "", Duration_min: f.durationMin || "",
+          Rounds_Completed: f.roundsCompleted || "", Effort_1_10: f.effort || "",
+          Best_Metric: f.metric, Notes: s.notes || ""
+        });
+      });
+    });
+    var msRows = state.milestones.map(function(m){
+      return { Date:m.date, Pushup_Max:m.pushups, Plank_Max_Sec:m.plankSec, Paused_Squat_Max:m.pausedSquat, FiveK_Time_Min:m.fiveKMin };
+    });
+    var bmRows = state.bodyMetrics.map(function(m){
+      return { Date:m.date, Weight_kg:m.weight, Waist_cm:m.waist, Sleep_hrs:m.sleep, Steps:m.steps, Protein_g:m.protein };
+    });
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sessionRows.length?sessionRows:[{Note:"No sessions logged yet"}]), "Sessions");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(msRows.length?msRows:[{Note:"No milestones logged yet"}]), "Milestones");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bmRows.length?bmRows:[{Note:"No body metrics logged yet"}]), "Body Metrics");
+
+    XLSX.writeFile(wb, "fitness-tracker-" + todayStr() + ".xlsx");
+  }
+
+  // ---------- Render pieces ----------
+  function renderMacroStrip(){
+    if(!state.settings.startDate){
+      return '<div class="card"><div class="row" style="align-items:flex-end;margin-bottom:0;">' +
+        '<div class="field" style="flex:1 1 200px;"><label>Set program start date to track your block</label>' +
+        '<input type="date" id="startDateInput" value=""></div></div></div>';
+    }
+    var wk = weekInfo(state.settings.startDate);
+    var blocks = "";
+    for(var w=1; w<=20; w++){
+      var deload = w % 5 === 4;
+      var cur = w === wk.week;
+      blocks += '<div class="wk ' + (deload?'deload':'build') + (cur?' current':'') + '" title="Week '+w+(deload?' · deload':'')+'">'+w+'</div>';
+    }
+    return '<div class="card">' +
+      '<div class="entryRow" style="border-bottom:none;padding-top:0;">' +
+        '<span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;">Week ' + wk.week + ' of 20' + (wk.isDeload?' <span style="color:var(--amber)">· Deload Week</span>':'') + '</span>' +
+        '<button class="btn btn-ghost" data-action="reset-start" style="padding:4px 8px;min-height:auto;font-size:11px;">reset date</button>' +
+      '</div>' +
+      '<div class="strip">' + blocks + '</div>' +
+    '</div>';
+  }
+
+  function fieldHtml(label, opts){
+    opts = opts || {};
+    var type = opts.type || "text";
+    var attrs = ' value="' + esc(opts.value||"") + '"';
+    Object.keys(opts.data||{}).forEach(function(k){ attrs += ' data-' + k + '="' + esc(opts.data[k]) + '"'; });
+    if(opts.id) attrs += ' id="' + opts.id + '"';
+    if(opts.placeholder) attrs += ' placeholder="' + esc(opts.placeholder) + '"';
+    return '<div class="field" style="' + (opts.width?('flex:0 0 '+opts.width+';'):'') + '">' +
+      '<label>' + label + '</label><input type="' + type + '"' + attrs + '></div>';
+  }
+
+  function renderLogTab(){
+    var exList = DAY_EXERCISES[state.logDay].exercises;
+    var dayOptions = DAY_ORDER.map(function(d){
+      return '<option value="'+d+'"'+(d===state.logDay?' selected':'')+'>'+d+' — '+DAY_EXERCISES[d].label+'</option>';
+    }).join("");
+
+    var exBlocks = exList.map(function(ex){
+      var f = state.logForm[ex.id] || {};
+      var inner = "";
+      if(ex.unit === "distance"){
+        inner = fieldHtml("Distance (km)", {value:f.distanceKm, data:{ex:ex.id,key:"distanceKm"}, width:"130px"}) +
+                fieldHtml("Duration (min)", {value:f.durationMin, data:{ex:ex.id,key:"durationMin"}, width:"130px"});
+      } else if(ex.unit === "rounds"){
+        inner = fieldHtml("Rounds completed", {value:f.roundsCompleted, data:{ex:ex.id,key:"roundsCompleted"}, width:"150px"}) +
+                fieldHtml("Effort (1–10)", {value:f.effort, data:{ex:ex.id,key:"effort"}, width:"130px"});
+      } else {
+        inner = (ex.hasWeight ? fieldHtml("Weight (kg)", {value:f.weight, data:{ex:ex.id,key:"weight"}, width:"110px"}) : "") +
+                fieldHtml(ex.unit==="sec" ? "Duration per set, sec (e.g. 35,32,30)" : "Reps per set (e.g. 10,10,9)",
+                  {value:f.setsList, data:{ex:ex.id,key:"setsList"}, width:"260px"});
+      }
+      return '<div class="exBlock"><div class="exHead"><span class="exName">'+ex.name+'</span><span class="exTarget">'+ex.target+'</span></div>' +
+        '<div class="row" style="margin-bottom:0;">' + inner + '</div></div>';
+    }).join("");
+
+    var recent = Object.keys(state.sessions).sort().reverse().slice(0,6);
+    var recentHtml = recent.length === 0
+      ? '<p class="muted">Nothing logged yet — save your first session above.</p>'
+      : recent.map(function(date){
+          var s = state.sessions[date];
+          return '<div class="entryRow"><span class="muted">'+date+'</span><span>'+s.day+' — '+Object.keys(s.exercises||{}).length+' exercises</span>' +
+            '<button class="delBtn" data-action="delete-session" data-date="'+date+'">✕</button></div>';
+        }).join("");
+
+    return '<div class="card"><div class="cardTitle"><span class="dot"></span>Session Details</div>' +
+      '<div class="row">' +
+        '<div class="field" style="flex:0 0 160px;"><label>Date</label><input type="date" id="logDate" value="'+state.logDate+'"></div>' +
+        '<div class="field" style="flex:1 1 220px;"><label>Day</label><select id="logDay">'+dayOptions+'</select></div>' +
+      '</div>' + exBlocks +
+      '<div class="row" style="margin-top:12px;"><div class="field" style="flex:1 1 100%;"><label>Notes</label>' +
+        '<input type="text" data-notes="1" value="'+esc(state.logNotes)+'" placeholder="How it felt, sleep, anything relevant"></div></div>' +
+      '<button class="btn btn-primary" data-action="save-session" style="margin-top:8px;">💾 Save session</button>' +
+      '</div>' +
+      '<div class="card"><div class="cardTitle"><span class="dot"></span>Recent Entries</div>' + recentHtml + '</div>';
+  }
+
+  function renderHistoryTab(){
+    var opts = ALL_EXERCISES.map(function(e){
+      return '<option value="'+e.id+'"'+(e.id===state.historyExId?' selected':'')+'>'+e.day+' — '+e.name+'</option>';
+    }).join("");
+    var data = Object.keys(state.sessions).filter(function(d){
+      return state.sessions[d].exercises && state.sessions[d].exercises[state.historyExId];
+    }).sort().map(function(d){
+      return { date:d, value: state.sessions[d].exercises[state.historyExId].metric };
+    });
+    var chartHtml = data.length === 0
+      ? '<p class="muted">No logged sets for this exercise yet.</p>'
+      : '<div style="height:220px;"><canvas id="historyChart"></canvas></div>';
+
+    setTimeout(function(){
+      if(data.length){
+        drawChart("historyChart", data.map(function(d){return d.date;}), data.map(function(d){return d.value;}), "#D9A441");
+      }
+    }, 0);
+
+    return '<div class="card"><div class="cardTitle"><span class="dot"></span>Exercise Progress</div>' +
+      '<div class="field" style="margin-bottom:14px;"><label>Exercise</label><select id="historyExId">'+opts+'</select></div>' +
+      chartHtml + '</div>';
+  }
+
+  function renderMilestonesTab(){
+    var m = state.msForm;
+    var metrics = [
+      {id:"pushups", label:"Push-ups"}, {id:"plankSec", label:"Plank (sec)"},
+      {id:"pausedSquat", label:"Paused Squats"}, {id:"fiveKMin", label:"5K Time (min)"}
+    ];
+    var metricBtns = metrics.map(function(mm){
+      return '<button class="btn btn-teal'+(state.msMetric===mm.id?' active':'')+'" data-action="metric-toggle" data-group="ms" data-value="'+mm.id+'">'+mm.label+'</button>';
+    }).join("");
+    var chartData = state.milestones.filter(function(x){return x[state.msMetric]!==null && x[state.msMetric]!==undefined && x[state.msMetric]!=="";})
+      .map(function(x){ return {date:x.date, value:x[state.msMetric]}; });
+    var chartHtml = chartData.length === 0 ? '<p class="muted">No entries for this metric yet.</p>' : '<div style="height:200px;"><canvas id="msChart"></canvas></div>';
+    setTimeout(function(){
+      if(chartData.length) drawChart("msChart", chartData.map(function(d){return d.date;}), chartData.map(function(d){return d.value;}), "#5FA8A0");
+    }, 0);
+
+    return '<div class="card"><div class="cardTitle"><span class="dot"></span>Log a Milestone Test</div>' +
+      '<div class="row">' +
+        fieldHtml("Date", {type:"date", value:m.date, data:{msfield:"date"}, width:"150px"}) +
+        fieldHtml("Push-up max", {value:m.pushups, data:{msfield:"pushups"}, width:"120px"}) +
+        fieldHtml("Plank max (sec)", {value:m.plankSec, data:{msfield:"plankSec"}, width:"130px"}) +
+        fieldHtml("Paused squat max", {value:m.pausedSquat, data:{msfield:"pausedSquat"}, width:"140px"}) +
+        fieldHtml("5K time (min)", {value:m.fiveKMin, data:{msfield:"fiveKMin"}, width:"120px"}) +
+      '</div>' +
+      '<button class="btn btn-primary" data-action="save-milestone">💾 Save milestone</button>' +
+      '</div>' +
+      '<div class="card"><div class="cardTitle"><span class="dot"></span>Milestone Trend</div>' +
+      '<div class="metricBtns">'+metricBtns+'</div>' + chartHtml + '</div>';
+  }
+
+  function renderBodyTab(){
+    var b = state.bmForm;
+    var metrics = [
+      {id:"weight", label:"Weight"}, {id:"waist", label:"Waist"}, {id:"sleep", label:"Sleep"},
+      {id:"steps", label:"Steps"}, {id:"protein", label:"Protein"}
+    ];
+    var metricBtns = metrics.map(function(mm){
+      return '<button class="btn btn-teal'+(state.bmMetric===mm.id?' active':'')+'" data-action="metric-toggle" data-group="bm" data-value="'+mm.id+'">'+mm.label+'</button>';
+    }).join("");
+    var chartData = state.bodyMetrics.filter(function(x){return x[state.bmMetric]!==null && x[state.bmMetric]!==undefined && x[state.bmMetric]!=="";})
+      .map(function(x){ return {date:x.date, value:x[state.bmMetric]}; });
+    var chartHtml = chartData.length === 0 ? '<p class="muted">No entries for this metric yet.</p>' : '<div style="height:200px;"><canvas id="bmChart"></canvas></div>';
+    setTimeout(function(){
+      if(chartData.length) drawChart("bmChart", chartData.map(function(d){return d.date;}), chartData.map(function(d){return d.value;}), "#5FA8A0");
+    }, 0);
+
+    return '<div class="card"><div class="cardTitle"><span class="dot"></span>Log Body Metrics</div>' +
+      '<div class="row">' +
+        fieldHtml("Date", {type:"date", value:b.date, data:{bmfield:"date"}, width:"150px"}) +
+        fieldHtml("Weight (kg)", {value:b.weight, data:{bmfield:"weight"}, width:"110px"}) +
+        fieldHtml("Waist (cm)", {value:b.waist, data:{bmfield:"waist"}, width:"110px"}) +
+        fieldHtml("Sleep (hrs)", {value:b.sleep, data:{bmfield:"sleep"}, width:"110px"}) +
+        fieldHtml("Steps", {value:b.steps, data:{bmfield:"steps"}, width:"110px"}) +
+        fieldHtml("Protein (g)", {value:b.protein, data:{bmfield:"protein"}, width:"110px"}) +
+      '</div>' +
+      '<button class="btn btn-primary" data-action="save-body">💾 Save entry</button>' +
+      '</div>' +
+      '<div class="card"><div class="cardTitle"><span class="dot"></span>Body Metric Trend</div>' +
+      '<div class="metricBtns">'+metricBtns+'</div>' + chartHtml + '</div>';
+  }
+
+  function render(){
+    var tabs = [
+      {id:"log", label:"🏋 Log Session"}, {id:"history", label:"📈 History"},
+      {id:"milestones", label:"🚩 Milestones"}, {id:"body", label:"❤ Body"}
+    ];
+    var tabBtns = tabs.map(function(t){
+      return '<button class="btn btn-ghost'+(state.tab===t.id?' active':'')+'" data-action="set-tab" data-value="'+t.id+'">'+t.label+'</button>';
+    }).join("");
+
+    var body = state.tab==="log" ? renderLogTab()
+      : state.tab==="history" ? renderHistoryTab()
+      : state.tab==="milestones" ? renderMilestonesTab()
+      : renderBodyTab();
+
+    document.getElementById('app').innerHTML =
+      '<div class="headerRow"><h1>Load Log</h1><span class="status" id="statusEl">'+esc(state.statusMsg)+'</span></div>' +
+      '<p class="sub">Progressive overload tracker · Weekly Fitness Plan v2</p>' +
+      '<div class="noteBanner">Data is saved only on this device (browser local storage) — nothing is uploaded anywhere. Use the same browser each time, and export to Excel occasionally as a backup.</div>' +
+      '<div class="exportBar"><button class="btn btn-ghost" data-action="export-excel">⬇ Export to Excel</button></div>' +
+      renderMacroStrip() +
+      '<div class="tabs">' + tabBtns + '</div>' +
+      body;
+  }
+
+  // ---------- Event delegation ----------
+  document.getElementById('app').addEventListener('input', function(e){
+    var t = e.target;
+    if(t.dataset.ex){
+      state.logForm[t.dataset.ex] = state.logForm[t.dataset.ex] || {};
+      state.logForm[t.dataset.ex][t.dataset.key] = t.value;
+    } else if(t.dataset.notes){
+      state.logNotes = t.value;
+    } else if(t.dataset.msfield){
+      state.msForm[t.dataset.msfield] = t.value;
+      if(t.dataset.msfield === "date"){ /* keep as-is, no rerender needed */ }
+    } else if(t.dataset.bmfield){
+      state.bmForm[t.dataset.bmfield] = t.value;
+    } else if(t.id === 'logDate'){
+      state.logDate = t.value; prefillLogForm(); render();
+    } else if(t.id === 'logDay'){
+      state.logDay = t.value; prefillLogForm(); render();
+    } else if(t.id === 'historyExId'){
+      state.historyExId = t.value; render();
+    } else if(t.id === 'startDateInput'){
+      state.settings.startDate = t.value; saveLS(LS.settings, state.settings); render();
+    }
+  });
+
+  document.getElementById('app').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-action]');
+    if(!btn) return;
+    var action = btn.dataset.action;
+
+    if(action === 'set-tab'){
+      state.tab = btn.dataset.value; render();
+    }
+    else if(action === 'save-session'){
+      var exercises = {};
+      DAY_EXERCISES[state.logDay].exercises.forEach(function(ex){
+        var f = state.logForm[ex.id];
+        if(!f) return;
+        var hasData = Object.keys(f).some(function(k){ return f[k] !== "" && f[k] !== undefined; });
+        if(!hasData) return;
+        exercises[ex.id] = Object.assign({}, f, { metric: computeMetric(ex.unit, f) });
+      });
+      state.sessions[state.logDate] = { day: state.logDay, exercises: exercises, notes: state.logNotes, savedAt: new Date().toISOString() };
+      saveLS(LS.sessions, state.sessions);
+      flash("Session saved");
+    }
+    else if(action === 'delete-session'){
+      delete state.sessions[btn.dataset.date];
+      saveLS(LS.sessions, state.sessions);
+      flash("Entry deleted");
+    }
+    else if(action === 'save-milestone'){
+      if(!state.msForm.date) return;
+      var entry = {
+        date: state.msForm.date,
+        pushups: state.msForm.pushups===""?null:parseFloat(state.msForm.pushups),
+        plankSec: state.msForm.plankSec===""?null:parseFloat(state.msForm.plankSec),
+        pausedSquat: state.msForm.pausedSquat===""?null:parseFloat(state.msForm.pausedSquat),
+        fiveKMin: state.msForm.fiveKMin===""?null:parseFloat(state.msForm.fiveKMin)
+      };
+      state.milestones = state.milestones.filter(function(m){return m.date!==entry.date;}).concat([entry]).sort(function(a,b){return a.date.localeCompare(b.date);});
+      saveLS(LS.milestones, state.milestones);
+      flash("Milestone logged");
+    }
+    else if(action === 'save-body'){
+      if(!state.bmForm.date) return;
+      var be = {
+        date: state.bmForm.date,
+        weight: state.bmForm.weight===""?null:parseFloat(state.bmForm.weight),
+        waist: state.bmForm.waist===""?null:parseFloat(state.bmForm.waist),
+        sleep: state.bmForm.sleep===""?null:parseFloat(state.bmForm.sleep),
+        steps: state.bmForm.steps===""?null:parseFloat(state.bmForm.steps),
+        protein: state.bmForm.protein===""?null:parseFloat(state.bmForm.protein)
+      };
+      state.bodyMetrics = state.bodyMetrics.filter(function(m){return m.date!==be.date;}).concat([be]).sort(function(a,b){return a.date.localeCompare(b.date);});
+      saveLS(LS.body, state.bodyMetrics);
+      flash("Body metrics logged");
+    }
+    else if(action === 'export-excel'){
+      exportExcel();
+    }
+    else if(action === 'reset-start'){
+      state.settings.startDate = ""; saveLS(LS.settings, state.settings); render();
+    }
+    else if(action === 'metric-toggle'){
+      if(btn.dataset.group === 'ms') state.msMetric = btn.dataset.value;
+      else state.bmMetric = btn.dataset.value;
+      render();
+    }
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
